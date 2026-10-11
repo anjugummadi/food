@@ -1,0 +1,45 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FoodRescue AI</title><style>
+:root{--bg:#f6f8f4;--card:#fff;--tx:#1d2a1f;--g:#2f7d4f;--r:#c0392b;--y:#d68910;--b:#e1e6dc}
+@media(prefers-color-scheme:dark){:root{--bg:#141a15;--card:#1d261f;--tx:#e8efe9;--b:#2c382e}}
+*{box-sizing:border-box}body{margin:0;font:15px system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{background:var(--g);color:#fff;padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+header h1{font-size:18px;margin:0 auto 0 0}button,select,input{font:inherit;padding:7px 10px;border-radius:8px;border:1px solid var(--b);background:var(--card);color:var(--tx)}
+button{cursor:pointer;background:var(--g);color:#fff;border:0}button.t{background:#ffffff33}button.on{background:#fff;color:var(--g)}
+main{max-width:1000px;margin:auto;padding:14px}.card{background:var(--card);border:1px solid var(--b);border-radius:12px;padding:14px;margin-bottom:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.kpi b{font-size:26px;display:block;color:var(--g)}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse}td,th{padding:7px;border-bottom:1px solid var(--b);text-align:left;white-space:nowrap}
+.bar{height:8px;border-radius:4px;background:var(--b);min-width:70px}.bar i{display:block;height:100%;border-radius:4px}
+.high{background:var(--r)}.medium{background:var(--y)}.low{background:var(--g)}.row{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+h2{margin:0 0 8px;font-size:16px}small{opacity:.7}[title]{cursor:help}
+</style></head><body>
+<header><h1>🌱 FoodRescue AI</h1><button class="t on" data-v="biz">Business</button><button class="t" data-v="ngo">NGO</button><button class="t" data-v="imp">Impact</button></header>
+<main id="app"></main>
+<script>
+const $=s=>document.querySelector(s),api=(p,o)=>fetch('/api'+p,o).then(r=>r.ok?r.json():r.json().then(e=>{throw e.detail}));
+const post=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+let view='biz',BIZ=1,NGO=2;
+document.querySelectorAll('header button').forEach(b=>b.onclick=()=>{document.querySelectorAll('header button').forEach(x=>x.classList.remove('on'));b.classList.add('on');view=b.dataset.v;render()});
+const bar=(v,l)=>`<div class="bar" title="Risk ${v}/100"><i class="${l}" style="width:${v}%"></i></div>`;
+async function render(){const a=$('#app');try{
+ if(view=='biz'){let [it,al,ro]=await Promise.all([api('/items/'+BIZ),api('/alerts/'+BIZ),api('/reorder/'+BIZ)]);
+  if(!it.length){a.innerHTML='<div class="card">No data yet. <button onclick="api(\'/seed\',{method:\'POST\'}).then(render)">Load demo data</button></div>';return}
+  a.innerHTML=`<div class="kpis"><div class="card kpi"><b>${it.length}</b>Products</div><div class="card kpi"><b>${it.filter(i=>i.level=='high').length}</b>High waste risk</div><div class="card kpi"><b>${al.length}</b>Expiring ≤3 days</div></div>
+  <div class="card"><h2>Inventory health <small title="Combines days-to-expiry, stock vs forecast demand, and perishability">(AI waste risk)</small></h2><div class="tw"><table><tr><th>Item<th>Category<th>Storage<th>Qty<th>Expiry<th>Risk<th></tr>
+  ${it.map(i=>`<tr><td>${i.name}<td>${i.category}<td>${i.storage}<td>${i.qty}${i.unit}<td>${i.expiry} (${i.days_to_expiry}d)<td>${bar(i.risk,i.level)}<td>${i.level!='low'?`<button onclick="donate(${i.id},${i.qty})">Donate</button>`:''}`).join('')}</table></div></div>
+  <div class="card"><h2>Smart reorder</h2><div class="tw"><table><tr><th>Item<th>Stock<th>7-day forecast<th>Suggested order<th></tr>${ro.map(r=>`<tr><td>${r.item}<td>${r.stock}<td>${r.forecast_7d}<td>${r.suggested_order}<td><small>${r.note}</small>`).join('')}</table></div></div>
+  <div class="card"><h2>Add stock</h2><div class="row"><input id="n" placeholder="Name"><select id="c">${['dairy','meat','bakery','produce','prepared','beverages','grains','canned'].map(c=>`<option>${c}`).join('')}</select><input id="q" type="number" placeholder="Qty (kg)" style="width:100px"><input id="e" type="date"><button onclick="addItem()">Add</button></div>
+  <div class="row"><input type="file" id="f" accept=".csv"><button onclick="up()">Upload CSV</button><input id="bc" placeholder="Barcode" style="width:110px"><button onclick="sc(-1)">Sold −1</button><button onclick="sc(1)">Stock +1</button></div><small id="m"></small></div>`}
+ if(view=='ngo'){let [l,p]=await Promise.all([api('/listings'),api('/pickups/'+NGO)]);
+  a.innerHTML=`<div class="card"><h2>Live donation feed</h2>${l.length?l.map(x=>`<div class="row"><b>${x.name}</b> ${x.qty}kg · exp ${x.expiry} · ${x.location} · ${x.window}<button onclick="claim(${x.id})">Match &amp; schedule</button></div>`).join(''):'<small>No open listings.</small>'}</div>
+  <div class="card"><h2>Pickups</h2>${p.length?p.map(x=>`<div class="row">${x.name} ${x.qty}kg · ${x.slot} · <b>${x.status}</b>${x.status=='scheduled'?`<button onclick="api('/pickups/${x.id}/complete',{method:'POST'}).then(render)">Mark collected</button>`:''}</div>`).join(''):'<small>None yet.</small>'}</div>`}
+ if(view=='imp'){let i=await api('/impact');a.innerHTML=`<div class="kpis"><div class="card kpi"><b>${i.kg_diverted}</b>kg food diverted</div><div class="card kpi"><b>${i.meals}</b>meals redistributed</div><div class="card kpi"><b>${i.co2_kg_saved}</b>kg CO₂e saved</div></div><small>Assumes 0.45 kg/meal and 2.5 kg CO₂e per kg of food.</small>`}
+}catch(e){a.innerHTML='<div class="card">Error: '+JSON.stringify(e)+'</div>'}}
+const note=t=>{const m=$('#m');if(m)m.textContent=t};
+async function addItem(){try{await post('/items',{biz_id:BIZ,name:$('#n').value,category:$('#c').value,qty:+$('#q').value,expiry:$('#e').value});render()}catch(e){note(e)}}
+async function up(){const f=$('#f').files[0];if(!f)return;const d=new FormData();d.append('file',f);await api('/items/upload/'+BIZ,{method:'POST',body:d});render()}
+async function sc(d){try{await post('/scan',{biz_id:BIZ,barcode:$('#bc').value,delta:d});render()}catch(e){note(e)}}
+async function donate(id,q){const loc=prompt('Pickup location','Fresh Mart, Tirupati');if(!loc)return;await post('/listings',{item_id:id,qty:q,location:loc,window:'Today 4-7 PM'});render()}
+async function claim(id){const m=await api('/match/'+id);const best=m[0];if(confirm(`Best match: ${best.ngo} (${best.score}/100, ${best.distance_km} km). Schedule pickup?`)){await post('/pickups',{listing_id:id,ngo_id:best.ngo_id,slot:'Today 5:00 PM'});render()}}
+render();
+</script></body></html>
