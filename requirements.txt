@@ -1,0 +1,4 @@
+fastapi
+uvicorn
+python-multipart
+# optional: prophet  (used automatically for forecasting if installed)
